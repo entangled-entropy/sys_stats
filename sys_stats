@@ -1,0 +1,93 @@
+#!/bin/bash
+
+date_time(){
+	echo $(date "+%b.%d.%a [%r]")
+}
+
+cpu_freq(){
+	echo $(grep "cpu MHz" /proc/cpuinfo | awk '{ total += $4; count++ } END { if (count > 0) printf "%.2fGHz\n", total / (count * 1000); else print "0.00 GHz" }')
+}
+
+cpu_load() {
+    # Read the first line of /proc/stat
+    read cpu user nice system idle iowait irq softirq steal < /proc/stat
+
+    # Calculate total CPU time
+    total1=$((user + nice + system + idle + iowait + irq + softirq))
+
+    # Calculate total idle time
+    idle_time1=$((idle + iowait))
+
+    # Wait for a second
+    sleep 0.5
+
+    # Read the second line of /proc/stat
+    read cpu user nice system idle iowait irq softirq steal < /proc/stat
+
+    # Calculate total CPU time again
+    total2=$((user + nice + system + idle + iowait + irq + softirq))
+
+    # Calculate total idle time again
+    idle_time2=$((idle + iowait))
+
+    # Calculate the difference
+    total_diff=$((total2 - total1))
+    idle_diff=$((idle_time2 - idle_time1))
+
+    # Calculate CPU usage percentage
+    cpu_usage=$((100 * (total_diff - idle_diff) / total_diff))
+    if [ "$cpu_usage" -lt 1 ]; then
+        cpu_usage="<1"
+    fi
+
+    # Print the overall CPU usage
+    echo "$cpu_usage%"
+}
+
+battery(){
+  battery_level=$(acpi | awk '{print $3, $4}' | sed 's/,\|Full\|Discharging\|%//g' | sed 's/Charging\|%/[AC]/g')
+  if [[ $battery_level -lt 50 ]]; then
+    mpv galaxy_low_battery.mp3 1> /dev/null
+  fi
+  echo "$battery_level%"
+
+
+}
+
+memory(){
+	# Read memory information from /proc/meminfo
+	read total_mem < <(grep MemTotal /proc/meminfo | awk '{print $2}')
+	read free_mem < <(grep MemFree /proc/meminfo | awk '{print $2}')
+	read buffers < <(grep Buffers /proc/meminfo | awk '{print $2}')
+	read cached < <(grep Cached /proc/meminfo | awk '{print $2}')
+	# read total_swap < <(grep SwapTotal /proc/meminfo | awk '{print $2}')
+	# read free_swap < <(grep SwapFree /proc/meminfo | awk '{print $2}')
+	
+	# Calculate used memory
+	used_mem=$(echo "scale=2; ($total_mem - $free_mem - $buffers - $cached) / 1024 /1024" | bc)
+	# total_mem=$(echo "scale=2; $total_mem / 1024 /1024" | bc)
+
+	# Calculate RAM usage percentage
+	# ram_usage=$(echo "scale=2; (100 * $used_mem / $total_mem)" | bc)
+
+	# Calculate used swap
+	# used_swap=$(echo "scale=2; $total_swap - $free_swap" | bc)
+		
+	# Calculate Swap usage percentage
+	# swap_usage=$(echo "scale=2; (100 * $used_swap / $total_swap)" | bc)
+
+	# Print the results
+	echo "$used_mem GB"
+	# echo "$ram_usage%"
+	# echo "Swap: $used_swap / $total_swap"
+}
+
+network(){
+	#Give subnet addr if connected to Wifi
+	echo $(ip a | awk 'NR==13{print $2}' | sed 's/192.168.//g')
+}
+
+while true; do
+	xsetroot -name "IP: $(network) | [CPU: $(cpu_load) $(cpu_freq)] | RAM: $(memory) | BAT:$(battery) | $(date_time)"
+	sleep 5;
+done
